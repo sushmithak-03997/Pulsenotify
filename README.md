@@ -17,9 +17,6 @@ Celery Beat (every 60 s)
 
 Admin -> GET /api/admin/summary/
 ```
-
-Repository: https://github.com/sushmithak-03997/pulsenotify
-
 ---
 
 ## Requirements coverage
