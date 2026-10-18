@@ -1,0 +1,767 @@
+{
+  "info": {
+    "name": "PulseNotify API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run the folders in order (Runner). Core scenarios need no setup; Admin scenarios need an admin account (see variables admin_user / admin_password)."
+  },
+  "item": [
+    {
+      "name": "Core scenarios (01-15)",
+      "item": [
+        {
+          "name": "01 Register Alice (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{alice_user}}\",\n  \"password\": \"securepass\",\n  \"email\": \"alice@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const run = Date.now();",
+                  "pm.collectionVariables.set(\"alice_user\", \"alice_\" + run);",
+                  "pm.collectionVariables.set(\"bob_user\", \"bob_\" + run);",
+                  "pm.collectionVariables.set(\"mallory_user\", \"mallory_\" + run);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"Returns username, access token and role=user\", () => {",
+                  "  pm.expect(j.username).to.eql(pm.collectionVariables.get(\"alice_user\"));",
+                  "  pm.expect(j.access).to.be.a(\"string\").and.not.empty;",
+                  "  pm.expect(j.role).to.eql(\"user\");",
+                  "});",
+                  "pm.collectionVariables.set(\"alice_token\", j.access);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Register Bob - second user for scoping tests (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{bob_user}}\",\n  \"password\": \"securepass\",\n  \"email\": \"bob@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"bob_token\", pm.response.json().access);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 Register duplicate username (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{alice_user}}\",\n  \"password\": \"securepass\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Register with role=admin in body is ignored (role stays user)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/register/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{mallory_user}}\",\n  \"password\": \"securepass\",\n  \"role\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"Role is still 'user'\", () => pm.expect(pm.response.json().role).to.eql(\"user\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Login valid credentials (200 + JWT)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{alice_user}}\",\n  \"password\": \"securepass\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"Returns access token\", () => pm.expect(j.access).to.be.a(\"string\").and.not.empty);",
+                  "pm.collectionVariables.set(\"alice_token\", j.access);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Login invalid credentials (401)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{alice_user}}\",\n  \"password\": \"wrong-password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Create price alert (201)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "alerts",
+                ""
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"origin\": \"DEL\",\n  \"destination\": \"BOM\",\n  \"threshold_price\": 4500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"Alert is active, owned by caller, fields normalised\", () => {",
+                  "  pm.expect(j.status).to.eql(\"active\");",
+                  "  pm.expect(j.origin).to.eql(\"DEL\");",
+                  "  pm.expect(j.destination).to.eql(\"BOM\");",
+                  "  pm.expect(parseFloat(j.threshold_price)).to.eql(4500);",
+                  "});",
+                  "pm.collectionVariables.set(\"alert_id\", j.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08 List own alerts (200)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "alerts",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test(\"Contains Alice's alert\", () => {",
+                  "  pm.expect(list).to.be.an(\"array\");",
+                  "  pm.expect(list.map(a => a.id)).to.include(parseInt(pm.collectionVariables.get(\"alert_id\")));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 List alerts without token (401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "alerts",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Bob lists alerts - sees none of Alice's (200, empty list)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "alerts",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 (not 404)\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Empty list - alerts are scoped to the user\", () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Mock price feed - valid route (200, no auth)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/flights/price/?route=DEL-BOM",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "flights",
+                "price",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "route",
+                  "value": "DEL-BOM"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"Route echoed and price within DEL-BOM range 3000-7000\", () => {",
+                  "  pm.expect(j.route).to.eql(\"DEL-BOM\");",
+                  "  pm.expect(j.price).to.be.within(3000, 7000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 Mock price feed - unknown route (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/flights/price/?route=XXX-YYY",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "flights",
+                "price",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "route",
+                  "value": "XXX-YYY"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 Bob deletes Alice's alert (404 - existence not revealed)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bob_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/{{alert_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "alerts",
+                "{{alert_id}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 Alice deactivates her alert (200 inactive)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/alerts/{{alert_id}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "alerts",
+                "{{alert_id}}",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Body is {status: 'inactive'}\", () => pm.expect(pm.response.json()).to.eql({status: \"inactive\"}));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 Regular user hits admin summary (403)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{alice_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/summary/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "summary",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Admin scenarios (16-17)",
+      "item": [
+        {
+          "name": "16 Login as admin (200)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/auth/login/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login",
+                ""
+              ]
+            },
+            "description": "Requires an admin account: python manage.py createsuperuser (superusers get role=admin automatically), or set role=admin in pgAdmin.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{admin_user}}\",\n  \"password\": \"{{admin_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 (create the admin first: python manage.py createsuperuser)\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"Role is admin\", () => pm.expect(j.role).to.eql(\"admin\"));",
+                  "pm.collectionVariables.set(\"admin_token\", j.access);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 Admin summary (200 + statistics)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/summary/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "summary",
+                ""
+              ]
+            },
+            "description": ""
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"Has all summary keys\", () => {",
+                  "  [\"total_alerts\",\"active_alerts\",\"triggered_alerts\",\"total_notifications\",\"top_routes\"].forEach(k => pm.expect(j).to.have.property(k));",
+                  "  pm.expect(j.top_routes).to.be.an(\"array\");",
+                  "});",
+                  "pm.test(\"Counts are consistent\", () => pm.expect(j.active_alerts + j.triggered_alerts).to.be.at.most(j.total_alerts));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "admin_user",
+      "value": "admin"
+    },
+    {
+      "key": "admin_password",
+      "value": "admin12345"
+    }
+  ]
+}
